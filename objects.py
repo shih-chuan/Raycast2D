@@ -1,5 +1,6 @@
 import pygame
 import math
+import _raycast2d
 
 # class Vector:
 #     def __init__(self, x, y) -> None:
@@ -16,9 +17,11 @@ def distance(p1, p2):
 
 class Boundary:
     def __init__(self, x1, y1, x2, y2) -> None:
+        # self.boundary = raycast2d.Boundary(x1, y1, x2, y2);
         self.a = (x1, y1)
         self.b = (x2, y2)
     def draw(self, screen, color, width=1):
+        # pygame.draw.line(screen, color, (self.boundary.a.x, self.boundary.a.y), (self.boundary.b.x, self.boundary.b.y), width)
         pygame.draw.line(screen, color, self.a, self.b, width)
 
 class Ray:
@@ -52,11 +55,11 @@ class Ray:
 class Light:
     def __init__(self, x, y) -> None:
         self.pos = (x, y)
-        self.rays = [Ray((x, y), math.radians(i * 0.5)) for i in range(0, 720, 1)]
+        self.rays = [Ray((x, y), math.radians(i)) for i in range(0, 360, 1)]
 
     def move(self, x, y):
         self.pos = (x, y)
-        self.rays = [Ray((x, y), math.radians(i * 0.5)) for i in range(0, 720, 1)]
+        self.rays = [Ray((x, y), math.radians(i)) for i in range(0, 360, 1)]
 
     def look(self, screen, color, walls):
         for ray in self.rays:

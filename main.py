@@ -20,7 +20,7 @@ walls = [Boundary(
     random.randint(0, scr_h), 
     random.randint(0, scr_w), 
     random.randint(0, scr_h), 
-) for i in range(100)]
+) for i in range(5)]
 
 walls.append(Boundary(0, 0, scr_w, 0))
 walls.append(Boundary(scr_w, 0, scr_w, scr_h))
