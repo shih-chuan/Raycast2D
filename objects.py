@@ -17,9 +17,10 @@ def distance(p1, p2):
 
 class Boundary:
     def __init__(self, x1, y1, x2, y2) -> None:
-        # self.boundary = raycast2d.Boundary(x1, y1, x2, y2);
-        self.a = (x1, y1)
-        self.b = (x2, y2)
+        b = _raycast2d.Boundary(x1, y1, x2, y2)
+        self.boundary = b
+        self.a = (b.a.x, b.a.y)
+        self.b = (b.b.x, b.b.y)
     def draw(self, screen, color, width=1):
         # pygame.draw.line(screen, color, (self.boundary.a.x, self.boundary.a.y), (self.boundary.b.x, self.boundary.b.y), width)
         pygame.draw.line(screen, color, self.a, self.b, width)
@@ -38,7 +39,7 @@ class Ray:
         x2, y2 = wall.b
         x3, y3 = self.pos
         x4, y4 = self.pos[0] + self.dir[0], self.pos[1] + self.dir[1]
-        den = (x1 - x2) * (y3 - y4) - (y1 - y2) *(x3 - x4)
+        den = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4)
         if den == 0:
             return
         t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / den
