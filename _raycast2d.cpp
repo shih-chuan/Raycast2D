@@ -3,6 +3,8 @@
 #include <vector>
 #include <immintrin.h>
 #include <limits>
+#include <set>
+#include <unordered_set>
 
 #include <mkl.h>
 #include <pybind11/pybind11.h>
@@ -28,9 +30,6 @@ public:
     float       & x()       { return buffer[0]; }
     const float & y() const { return buffer[1]; }
     float       & y()       { return buffer[1]; }
-    // py::array_t<float> coord() { 
-    //     return new float[]{m_x[0], m_y[0]};
-    // }
     void normalize() {
         float v_x = x(), v_y = y();
         float length = sqrt(v_x * v_x + v_y * v_y);
@@ -44,6 +43,7 @@ public:
     }
 private:
     float buffer[2];
+    // float * buffer = (float *) aligned_alloc(32, nelem * sizeof(float));
     // float * m_x = (float *) aligned_alloc(32, nelem * sizeof(float));
     // float * m_y = (float *) aligned_alloc(32, nelem * sizeof(float));
 };
@@ -51,12 +51,31 @@ private:
 class Boundary 
 {
 public:
+    Boundary() = default;
     Boundary(float x1, float y1, float x2, float y2) {
         a = Vector(x1, y1);
         b = Vector(x2, y2);
-        // std::cout << x1 << ", " << y1 << std::endl;
-        // std::cout << x2 << ", " << y2 << std::endl;
     }
+    bool operator< (const Boundary& boundary) const {
+        if (a.x() != boundary.a.x())
+            return a.x() > boundary.a.x();
+        else 
+            return b.x() > boundary.b.x();
+    }
+    bool operator== (const Boundary& boundary) const {
+        return a.x() == boundary.a.x() && a.y() == boundary.b.y();
+    }
+    // struct HashFunction
+    // {
+    //     size_t operator()(const Boundary& boundary) const
+    //     {
+    //         size_t ax = std::hash<float>()(boundary.a.x());
+    //         size_t ay = std::hash<float>()(boundary.a.y());
+    //         size_t bx = std::hash<float>()(boundary.b.x());
+    //         size_t by = std::hash<float>()(boundary.b.y());
+    //         return (ax ^ ay) + (bx ^ by);
+    //     }
+    // };
     Vector a;
     Vector b;
 };
@@ -68,23 +87,19 @@ public:
     Ray(float x, float y, float angle) { // angle with radians
         pos = Vector(x, y);
         dir = Vector(cosf(angle), sinf(angle));
-        // dir.normalize();
+        dir.normalize();
     }
     bool cast(Boundary wall, Vector& pt) {
         float x1 = wall.a.x(), y1 = wall.a.y();
         float x2 = wall.b.x(), y2 = wall.b.y();
-        // std::cout << x1 << ", " << y1 << std::endl;
-        // std::cout << x2 << ", " << y2 << std::endl;
         float x3 = pos.x(), y3 = pos.y();
         float x4 = pos.x() + dir.x(), y4 = pos.y() + dir.y();
         float den = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
-        // std::cout << "den: " << den;
         if (den == 0) {
             return false;
         }
         float t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / den;
         float u = -((x1 - x2) * (y1 - y3) - (y1 - y2) * (x1 - x3)) / den;
-        // std::cout << " t: " << t << " u: " << u << std::endl;
         if (t >= 0 && t < 1 && u >= 0) {
             pt = Vector(x1 + t * (x2 - x1), y1 + t * (y2 - y1));
             return true;
@@ -125,7 +140,6 @@ public:
                     ), 
                 *mden);
         float t = data[0], u = -data[1 * width]; 
-        // std::cout << " t: " << t << " u: " << u << std::endl;
         if (t > 0 && t < 1 && u > 0) {
             *mpt_x = _mm256_add_ps(*mx1, _mm256_mul_ps(*mt, _mm256_sub_ps(*mx2, *mx1)));
             *mpt_y = _mm256_add_ps(*my1, _mm256_mul_ps(*mt, _mm256_sub_ps(*my2, *my1)));
@@ -156,7 +170,11 @@ public:
     }
     Vector pos;
     std::vector<Ray> rays;
-    std::vector<float> cast(const std::vector<Boundary> &walls) {
+    bool cast(float rad, Boundary wall, Vector pt) {
+        Ray r (pos.x(), pos.y(), rad);
+        return r.cast(wall, pt);
+    }
+    std::vector<float> radiate(const std::vector<Boundary> &walls) {
         std::vector<float> result;
         for (Ray ray : rays) {
             Vector nearest;
@@ -175,13 +193,29 @@ public:
                 }
             }
             if (hasIntersection) {
-                // std::cout << "nearest: " << nearest->x() << " " << nearest->y();
                 result.push_back(nearest.x());
                 result.push_back(nearest.y());
             }
         }
         return result;
     }
+};
+
+class Endpoint
+{
+public:
+    Endpoint() = default;
+    Endpoint(float x, float y, float l_x, float l_y): pos(Vector(x, y)) {
+        angle = atan2(l_y - y, l_x - x);
+    }
+    bool operator< (const Endpoint& e) const {
+        return angle > e.angle;
+    }
+    bool operator== (const Endpoint& e) const {
+        return pos.x() == e.pos.x() && pos.y() == e.pos.y();
+    }
+    Vector pos;
+    float angle;
 };
 
 class Map {
@@ -191,15 +225,62 @@ public:
     Map(Light lt): light(lt) {};
     void add_wall(Boundary wall) {
         walls.push_back(wall);
+        endpoints.insert(Endpoint(wall.a.x(), wall.a.y(), light.pos.x(), light.pos.y()));
+        endpoints.insert(Endpoint(wall.b.x(), wall.b.y(), light.pos.x(), light.pos.y()));
     }
     void delete_wall(int index) {
         walls.erase(walls.begin() + index);
     }
     std::vector<float> light_cast() {
-        return light.cast(walls);
+        return light.radiate(walls);
+    }
+    std::vector<float> light_sweep() {
+        std::vector<float> result;
+        std::set<Boundary> open;
+        float record = std::numeric_limits<float>::max();
+        Boundary new_nearest;
+        for (Endpoint e : endpoints) {
+            // std::cout << "endpoint: " << walls.size() << " " << e.pos.x() << ", " << e.pos.y() << std::endl;
+            Boundary nearest = new_nearest;
+            for (Boundary wall : walls) {
+                // std::cout << "in open: " << wall.a.x() << ", " << wall.a.y() << " " << wall.b.x() << ", " << wall.b.y() << std::endl;
+                if (wall.a.x() == e.pos.x() && wall.a.y() == e.pos.y()) {
+                    open.insert(wall);
+                    // std::cout << "inserted" << std::endl;
+                }
+                if (wall.b.x() == e.pos.x() && wall.b.y() == e.pos.y()) {
+                    if (open.find(wall) != open.end()) {
+                        open.erase(wall);
+                        // std::cout << "erased" << std::endl;
+                    }
+                }
+            }
+            // for (Boundary wall : open) {
+            //     std::cout << wall.a.x() << ", " << wall.a.y() << " " << wall.b.x() << ", " << wall.b.y() << std::endl;
+            // }
+            // std::cout << std::endl;
+            for (Boundary wall : open) {
+                Vector pt (999999999, 999999999);
+                bool intersected = light.cast(e.angle, wall, pt);
+                if (intersected) {
+                    float d = light.pos.distance(pt);
+                    if (d < record) {
+                        record = d;
+                        new_nearest = wall;
+                    }
+                }
+            }
+            if (! (nearest == new_nearest)) {
+                result.push_back(e.pos.x());
+                result.push_back(e.pos.y());
+                record = std::numeric_limits<float>::max();
+            }
+        }
+        return result;
     }
     Light light;
     std::vector<Boundary> walls;
+    std::set<Endpoint> endpoints;
 };
 
 
@@ -222,13 +303,14 @@ PYBIND11_MODULE(_raycast2d, m)
     py::class_<Light>(m, "Light")
         .def(py::init<float, float>())
         .def_readwrite("pos", &Light::pos)
-        .def("move", &Light::move)
-        .def("cast", &Light::cast);
+        .def("move", &Light::move);
+        // .def("radiate", &Light::radiate);
     py::class_<Map>(m, "Map")
         .def(py::init<float, float>())
         .def(py::init<Light>())
         .def_readwrite("light", &Map::light)
         .def("light_cast", &Map::light_cast)
+        .def("light_sweep", &Map::light_sweep)
         .def("add_wall", &Map::add_wall);
 }
 
