@@ -1,4 +1,5 @@
 #include <iostream>
+#include <algorithm>
 #include <cmath>
 #include <vector>
 #include <immintrin.h>
@@ -40,6 +41,15 @@ public:
         float x_diff = (x() - p2.x());
         float y_diff = (y() - p2.y());
         return sqrt(x_diff * x_diff + y_diff * y_diff);
+    }
+    bool operator< (const Vector& v) const {
+        if (x() != v.x())
+            return x() > v.x();
+        else 
+            return y() > v.y();
+    }
+    bool operator== (const Vector& v) const {
+        return x() == v.x() && y() == v.y();
     }
 private:
     float buffer[2];
@@ -170,7 +180,7 @@ public:
     }
     Vector pos;
     std::vector<Ray> rays;
-    bool cast(float rad, Boundary wall, Vector pt) {
+    bool cast(float rad, Boundary wall, Vector &pt) {
         Ray r (pos.x(), pos.y(), rad);
         return r.cast(wall, pt);
     }
@@ -206,13 +216,13 @@ class Endpoint
 public:
     Endpoint() = default;
     Endpoint(float x, float y, float l_x, float l_y): pos(Vector(x, y)) {
-        angle = atan2(l_y - y, l_x - x);
+        angle = atan2f(l_y - y, l_x - x);
     }
     bool operator< (const Endpoint& e) const {
         return angle > e.angle;
     }
     bool operator== (const Endpoint& e) const {
-        return pos.x() == e.pos.x() && pos.y() == e.pos.y();
+        return pos.x() == e.pos.x() && pos.y() == e.pos.y() && angle == e.angle;
     }
     Vector pos;
     float angle;
@@ -225,8 +235,8 @@ public:
     Map(Light lt): light(lt) {};
     void add_wall(Boundary wall) {
         walls.push_back(wall);
-        endpoints.insert(Endpoint(wall.a.x(), wall.a.y(), light.pos.x(), light.pos.y()));
-        endpoints.insert(Endpoint(wall.b.x(), wall.b.y(), light.pos.x(), light.pos.y()));
+        endpoints.insert(Vector(wall.a.x(), wall.a.y()));
+        endpoints.insert(Vector(wall.b.x(), wall.b.y()));
     }
     void delete_wall(int index) {
         walls.erase(walls.begin() + index);
@@ -234,53 +244,59 @@ public:
     std::vector<float> light_cast() {
         return light.radiate(walls);
     }
-    std::vector<float> light_sweep() {
+    std::vector<float> visibility_polygon() {
+        std::vector<std::tuple<float, float, float>> visibilityAreaPoints; 
         std::vector<float> result;
-        std::set<Boundary> open;
-        float record = std::numeric_limits<float>::max();
-        Boundary new_nearest;
-        for (Endpoint e : endpoints) {
-            // std::cout << "endpoint: " << walls.size() << " " << e.pos.x() << ", " << e.pos.y() << std::endl;
-            Boundary nearest = new_nearest;
-            for (Boundary wall : walls) {
-                // std::cout << "in open: " << wall.a.x() << ", " << wall.a.y() << " " << wall.b.x() << ", " << wall.b.y() << std::endl;
-                if (wall.a.x() == e.pos.x() && wall.a.y() == e.pos.y()) {
-                    open.insert(wall);
-                    // std::cout << "inserted" << std::endl;
+        for (Vector e : endpoints) {
+            float rdx = e.x() - light.pos.x(), rdy = e.y() - light.pos.y();
+            float base_angle = atan2f(rdy, rdx);
+            float angle = 0;
+            for (int j = 0; j < 3; j++) {
+                switch (j) {
+                    case 0: angle = base_angle - 0.0001f; break;
+                    case 2: angle = base_angle + 0.0001f; break;
+                    default: angle = base_angle;
                 }
-                if (wall.b.x() == e.pos.x() && wall.b.y() == e.pos.y()) {
-                    if (open.find(wall) != open.end()) {
-                        open.erase(wall);
-                        // std::cout << "erased" << std::endl;
+                float min_dist = std::numeric_limits<float>::max();
+                float min_px = 0, min_py = 0, min_ang = 0;
+                bool hasIntersection = false;
+                
+                for (Boundary wall : walls) {
+                    Vector pt;
+                    bool intersected =  light.cast(angle, wall, pt);
+                    if (intersected) {
+                        float dist = light.pos.distance(pt);
+                        if (dist < min_dist) {
+                            min_dist = dist;
+                            min_px = pt.x();
+                            min_py = pt.y();
+                            min_ang = atan2f(min_py - light.pos.y(), min_px - light.pos.x());
+                            hasIntersection = true;
+                        }
                     }
                 }
-            }
-            // for (Boundary wall : open) {
-            //     std::cout << wall.a.x() << ", " << wall.a.y() << " " << wall.b.x() << ", " << wall.b.y() << std::endl;
-            // }
-            // std::cout << std::endl;
-            for (Boundary wall : open) {
-                Vector pt (999999999, 999999999);
-                bool intersected = light.cast(e.angle, wall, pt);
-                if (intersected) {
-                    float d = light.pos.distance(pt);
-                    if (d < record) {
-                        record = d;
-                        new_nearest = wall;
-                    }
+                if (hasIntersection) {
+                    visibilityAreaPoints.push_back({min_px, min_py, min_ang});
                 }
             }
-            if (! (nearest == new_nearest)) {
-                result.push_back(e.pos.x());
-                result.push_back(e.pos.y());
-                record = std::numeric_limits<float>::max();
+        }
+        std::sort(
+            visibilityAreaPoints.begin(),
+            visibilityAreaPoints.end(),
+            [&](const std::tuple<float, float, float> &t1, const std::tuple<float, float, float> &t2)
+            {
+                return std::get<2>(t1) < std::get<2>(t2);
             }
+        );
+        for (const std::tuple<float, float, float> &t : visibilityAreaPoints) {
+            result.push_back(std::get<0>(t));
+            result.push_back(std::get<1>(t));
         }
         return result;
     }
     Light light;
     std::vector<Boundary> walls;
-    std::set<Endpoint> endpoints;
+    std::set<Vector> endpoints;
 };
 
 
@@ -310,7 +326,7 @@ PYBIND11_MODULE(_raycast2d, m)
         .def(py::init<Light>())
         .def_readwrite("light", &Map::light)
         .def("light_cast", &Map::light_cast)
-        .def("light_sweep", &Map::light_sweep)
+        .def("visibility_polygon", &Map::visibility_polygon)
         .def("add_wall", &Map::add_wall);
 }
 
