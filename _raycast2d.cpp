@@ -6,6 +6,10 @@
 #include <limits>
 #include <set>
 #include <unordered_set>
+#define NORTH 0
+#define SOUTH 1
+#define EAST 2
+#define WEST 3 
 
 #include <mkl.h>
 #include <pybind11/pybind11.h>
@@ -23,36 +27,30 @@ class Vector
 {
 public:
     Vector() = default;
-    Vector(float v_x, float v_y) {
-        x() = v_x;
-        y() = v_y;
-    };
-    const float & x() const { return buffer[0]; }
-    float       & x()       { return buffer[0]; }
-    const float & y() const { return buffer[1]; }
-    float       & y()       { return buffer[1]; }
+    Vector(float v_x, float v_y): x(v_x), y(v_y) {};
     void normalize() {
-        float v_x = x(), v_y = y();
+        float v_x = x, v_y = y;
         float length = sqrt(v_x * v_x + v_y * v_y);
-        x() = v_x / length;
-        y() = v_y / length;
+        x = v_x / length;
+        y = v_y / length;
     }
     float distance(Vector &p2) {
-        float x_diff = (x() - p2.x());
-        float y_diff = (y() - p2.y());
+        float x_diff = (x - p2.x);
+        float y_diff = (y - p2.y);
         return sqrt(x_diff * x_diff + y_diff * y_diff);
     }
     bool operator< (const Vector& v) const {
-        if (x() != v.x())
-            return x() > v.x();
+        if (x != v.x)
+            return x > v.x;
         else 
-            return y() > v.y();
+            return y > v.y;
     }
     bool operator== (const Vector& v) const {
-        return x() == v.x() && y() == v.y();
+        return x == v.x && y == v.y;
     }
-private:
-    float buffer[2];
+public:
+    float x, y;
+    // float buffer[2];
     // float * buffer = (float *) aligned_alloc(32, nelem * sizeof(float));
     // float * m_x = (float *) aligned_alloc(32, nelem * sizeof(float));
     // float * m_y = (float *) aligned_alloc(32, nelem * sizeof(float));
@@ -67,25 +65,14 @@ public:
         b = Vector(x2, y2);
     }
     bool operator< (const Boundary& boundary) const {
-        if (a.x() != boundary.a.x())
-            return a.x() > boundary.a.x();
+        if (a.x != boundary.a.x)
+            return a.x > boundary.a.x;
         else 
-            return b.x() > boundary.b.x();
+            return b.x > boundary.b.x;
     }
     bool operator== (const Boundary& boundary) const {
-        return a.x() == boundary.a.x() && a.y() == boundary.b.y();
+        return a.x == boundary.a.x && a.y == boundary.b.y;
     }
-    // struct HashFunction
-    // {
-    //     size_t operator()(const Boundary& boundary) const
-    //     {
-    //         size_t ax = std::hash<float>()(boundary.a.x());
-    //         size_t ay = std::hash<float>()(boundary.a.y());
-    //         size_t bx = std::hash<float>()(boundary.b.x());
-    //         size_t by = std::hash<float>()(boundary.b.y());
-    //         return (ax ^ ay) + (bx ^ by);
-    //     }
-    // };
     Vector a;
     Vector b;
 };
@@ -100,10 +87,10 @@ public:
         dir.normalize();
     }
     bool cast(Boundary wall, Vector& pt) {
-        float x1 = wall.a.x(), y1 = wall.a.y();
-        float x2 = wall.b.x(), y2 = wall.b.y();
-        float x3 = pos.x(), y3 = pos.y();
-        float x4 = pos.x() + dir.x(), y4 = pos.y() + dir.y();
+        float x1 = wall.a.x, y1 = wall.a.y;
+        float x2 = wall.b.x, y2 = wall.b.y;
+        float x3 = pos.x, y3 = pos.y;
+        float x4 = pos.x + dir.x, y4 = pos.y + dir.y;
         float den = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
         if (den == 0) {
             return false;
@@ -118,12 +105,12 @@ public:
     }
     bool cast_simd(Boundary wall, Vector& pt) {
         float * data = (float *) aligned_alloc(32, nelem * sizeof(float));
-        Vector p4(pos.x() + dir.x(), pos.y() + dir.y());
-        __m256 * mx1 = (__m256 *) (&wall.a.x()), * my1 = (__m256 *) (&wall.a.y());
-        __m256 * mx2 = (__m256 *) (&wall.b.x()), * my2 = (__m256 *) (&wall.b.y());
-        __m256 * mx3 = (__m256 *) (&pos.x()), * my3 = (__m256 *) (&pos.y());
-        __m256 * mx4 = (__m256 *) (&p4.x()), * my4 = (__m256 *) (&p4.y());
-        __m256 * mpt_x = (__m256 *) (&pt.x()), * mpt_y = (__m256 *) (&pt.y());
+        Vector p4(pos.x + dir.x, pos.y + dir.y);
+        __m256 * mx1 = (__m256 *) (&wall.a.x), * my1 = (__m256 *) (&wall.a.y);
+        __m256 * mx2 = (__m256 *) (&wall.b.x), * my2 = (__m256 *) (&wall.b.y);
+        __m256 * mx3 = (__m256 *) (&pos.x), * my3 = (__m256 *) (&pos.y);
+        __m256 * mx4 = (__m256 *) (&p4.x), * my4 = (__m256 *) (&p4.y);
+        __m256 * mpt_x = (__m256 *) (&pt.x), * mpt_y = (__m256 *) (&pt.y);
         __m256 * mt = (__m256 *) (&data[0]), * mu = (__m256 *) (&data[1 * width]), * mden = (__m256 *) (&data[2 * width]);
 
         *mden   = _mm256_sub_ps(
@@ -136,7 +123,6 @@ public:
         if (den == 0) {
             return false;
         }
-
         *mt     = _mm256_div_ps(
                     _mm256_sub_ps(
                         _mm256_mul_ps(_mm256_sub_ps(*mx1, *mx3), _mm256_sub_ps(*my3, *my4)), 
@@ -181,7 +167,7 @@ public:
     Vector pos;
     std::vector<Ray> rays;
     bool cast(float rad, Boundary wall, Vector &pt) {
-        Ray r (pos.x(), pos.y(), rad);
+        Ray r (pos.x, pos.y, rad);
         return r.cast(wall, pt);
     }
     std::vector<float> radiate(const std::vector<Boundary> &walls) {
@@ -203,8 +189,8 @@ public:
                 }
             }
             if (hasIntersection) {
-                result.push_back(nearest.x());
-                result.push_back(nearest.y());
+                result.push_back(nearest.x);
+                result.push_back(nearest.y);
             }
         }
         return result;
@@ -222,7 +208,7 @@ public:
         return angle > e.angle;
     }
     bool operator== (const Endpoint& e) const {
-        return pos.x() == e.pos.x() && pos.y() == e.pos.y() && angle == e.angle;
+        return pos.x == e.pos.x && pos.y == e.pos.y && angle == e.angle;
     }
     Vector pos;
     float angle;
@@ -235,8 +221,8 @@ public:
     Map(Light lt): light(lt) {};
     void add_wall(Boundary wall) {
         walls.push_back(wall);
-        endpoints.insert(Vector(wall.a.x(), wall.a.y()));
-        endpoints.insert(Vector(wall.b.x(), wall.b.y()));
+        endpoints.insert(Vector(wall.a.x, wall.a.y));
+        endpoints.insert(Vector(wall.b.x, wall.b.y));
     }
     void delete_wall(int index) {
         walls.erase(walls.begin() + index);
@@ -248,7 +234,7 @@ public:
         std::vector<std::tuple<float, float, float>> visibilityAreaPoints; 
         std::vector<float> result;
         for (Vector e : endpoints) {
-            float rdx = e.x() - light.pos.x(), rdy = e.y() - light.pos.y();
+            float rdx = e.x - light.pos.x, rdy = e.y - light.pos.y;
             float base_angle = atan2f(rdy, rdx);
             float angle = 0;
             for (int j = 0; j < 3; j++) {
@@ -268,9 +254,9 @@ public:
                         float dist = light.pos.distance(pt);
                         if (dist < min_dist) {
                             min_dist = dist;
-                            min_px = pt.x();
-                            min_py = pt.y();
-                            min_ang = atan2f(min_py - light.pos.y(), min_px - light.pos.x());
+                            min_px = pt.x;
+                            min_py = pt.y;
+                            min_ang = atan2f(min_py - light.pos.y, min_px - light.pos.x);
                             hasIntersection = true;
                         }
                     }
@@ -305,9 +291,8 @@ PYBIND11_MODULE(_raycast2d, m)
     py::bind_vector<std::vector<float>>(m, "VectorFloat");
     py::class_<Vector>(m, "Vector")
         .def(py::init<float, float>())
-        .def_property("x", static_cast<const float& (Vector::*)() const>(&Vector::x), static_cast<float& (Vector::*)()>(&Vector::x))
-        .def_property("y", static_cast<const float& (Vector::*)() const>(&Vector::y), static_cast<float& (Vector::*)()>(&Vector::y));
-        // .def_property("coord", static_cast<const float[]& Vector::coord() const>(&Vector::coord), static_cast<float[]& Vector::coord()>(&Vector::coord));
+        .def_readwrite("x", &Vector::x)
+        .def_readwrite("y", &Vector::y);
     py::class_<Boundary>(m, "Boundary")
         .def(py::init<float, float, float, float>())
         .def_readwrite("a", &Boundary::a)
@@ -325,6 +310,7 @@ PYBIND11_MODULE(_raycast2d, m)
         .def(py::init<float, float>())
         .def(py::init<Light>())
         .def_readwrite("light", &Map::light)
+        .def_readwrite("walls", &Map::walls)
         .def("light_cast", &Map::light_cast)
         .def("visibility_polygon", &Map::visibility_polygon)
         .def("add_wall", &Map::add_wall);
