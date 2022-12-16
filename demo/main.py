@@ -18,7 +18,10 @@ while running:
             running = False
         if event.type == pygame.MOUSEBUTTONUP:
             pos = pygame.mouse.get_pos()
-            world.toggleWall(pos)
+            if event.button == 1:
+                world.toggleWall(pos)
+            if event.button == 3:
+                world.lightOn = not world.lightOn
     world.light = pygame.mouse.get_pos()
     world.draw(screen)
     pygame.display.flip()

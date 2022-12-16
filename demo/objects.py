@@ -1,7 +1,6 @@
 import pygame
 import config
-import numpy as np
-from _raycast2d import litArea, WallList
+from _raycast2d import litArea, litAreaFast, FloatVector
 
 lightMask = pygame.image.load('assets/light_cast.png') # radial gradient used for light pattern
 lightMask = pygame.transform.scale(lightMask, (2400,2400)) # resize gradient
@@ -24,7 +23,14 @@ class World:
         self.blockHeight = self.mapHeight // self.nCellsHeight
         self.world = [Cell() for i in range(0, self.nCellsHeight * self.nCellsWidth)]
         self.light = (0, 0)
-        self.walls = WallList()
+        self.lightOn = False
+        self.walls = FloatVector()
+        self.walls.extend([
+            -10, -10, (self.mapWidth + 10), -10, 
+            (self.mapWidth + 10), -10, (self.mapWidth + 10), (self.mapHeight + 10), 
+            (self.mapWidth + 10), (self.mapHeight + 10), -10, (self.mapHeight + 10), 
+            -10, (self.mapHeight + 10), -10, -10
+        ])
     def toPolyMap(self):
         self.walls.clear()
         for row in range(0, self.nCellsHeight):
@@ -32,8 +38,8 @@ class World:
                 for j in range(0, 4):
                     self.world[row * self.nCellsWidth + col].edge_exist[j] = False
                     self.world[row * self.nCellsWidth + col].edge_id[j] = 0
-        for row in range(1, self.nCellsHeight - 1):
-            for col in range(1, self.nCellsWidth - 1):
+        for row in range(0, self.nCellsHeight):
+            for col in range(0, self.nCellsWidth):
                 cellID = row * self.nCellsWidth + col
                 n = (row - 1) * self.nCellsWidth + col
                 s = (row + 1) * self.nCellsWidth + col
@@ -85,10 +91,10 @@ class World:
                             self.world[cellID].edge_id[SOUTH] = edge_id
                             self.world[cellID].edge_exist[SOUTH] = True
         self.walls.extend([
-            +10, +10, (self.mapWidth - 10), +10, 
-            (self.mapWidth - 10), +10, (self.mapWidth - 10), (self.mapHeight - 10), 
-            (self.mapWidth - 10), (self.mapHeight - 10), +10, (self.mapHeight - 10), 
-            +10, (self.mapHeight - 10), +10, +10
+            -10, -10, (self.mapWidth + 10), -10, 
+            (self.mapWidth + 10), -10, (self.mapWidth + 10), (self.mapHeight + 10), 
+            (self.mapWidth + 10), (self.mapHeight + 10), -10, (self.mapHeight + 10), 
+            -10, (self.mapHeight + 10), -10, -10
         ])
 
     def toggleWall(self, mouse_pos):
@@ -113,7 +119,10 @@ class World:
         for i in range(0, len(self.walls), 4):
             pygame.draw.line(screen, config.WHITE, (self.walls[i], self.walls[i + 1]), (self.walls[i + 2], self.walls[i + 3]), 2)
         # draw lit area
-        rays = litArea(float(self.light[0]), float(self.light[1]), self.walls)
+        rays = []
+        if self.lightOn:
+            rays = litAreaFast(float(self.light[0]), float(self.light[1]), self.walls)
+        # print(rays)
         polygon = []
         for r in range(0, len(rays), 2):
             polygon.append((rays[r], rays[r+1]))

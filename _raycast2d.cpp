@@ -4,12 +4,6 @@
 #include <vector>
 #include <immintrin.h>
 #include <limits>
-#define NORTH 0
-#define SOUTH 1
-#define EAST 2
-#define WEST 3 
-
-#include <mkl.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 #include <pybind11/stl_bind.h>
@@ -18,7 +12,7 @@ namespace py = pybind11;
 PYBIND11_MAKE_OPAQUE(std::vector<float>);
 
 constexpr const size_t width = 8;
-constexpr const size_t repeat = 1024 * 1024;
+constexpr const size_t repeat = 1<<10;
 constexpr const size_t nelem = width * repeat;
 
 float distance(
@@ -52,12 +46,133 @@ bool intersect(
     return false;
 }
 
+bool intersect_simd(
+    const int nWalls, float* pt,
+    __m256* mx1, __m256* my1, 
+    __m256* mx2, __m256* my2,
+    __m256* mx3, __m256* my3, 
+    __m256* mx4, __m256* my4
+) {
+    bool hasIntersection = false;
+    int nPacks = nWalls / 8 + 1;
+    float min_dist = std::numeric_limits<float>::max();
+    for (int i = 0; i < nPacks; i++) {
+        __m256 mden = _mm256_set1_ps(0.0);
+        __m256 mt = _mm256_set1_ps(0.0);
+        __m256 mu = _mm256_set1_ps(0.0);
+        __m256 mpt_x = _mm256_set1_ps(0.0);
+        __m256 mpt_y = _mm256_set1_ps(0.0);
+        mden    = _mm256_sub_ps(
+                    _mm256_mul_ps(_mm256_sub_ps(mx1[i], mx2[i]), _mm256_sub_ps(*my3, *my4)), 
+                    _mm256_mul_ps(_mm256_sub_ps(my1[i], my2[i]), _mm256_sub_ps(*mx3, *mx4))
+                );
+        mt      = _mm256_div_ps(
+                    _mm256_sub_ps(
+                        _mm256_mul_ps(_mm256_sub_ps(mx1[i], *mx3), _mm256_sub_ps(*my3, *my4)), 
+                        _mm256_mul_ps(_mm256_sub_ps(my1[i], *my3), _mm256_sub_ps(*mx3, *mx4))
+                    ), 
+                mden);
+        mu     = _mm256_div_ps(
+                    _mm256_sub_ps(
+                        _mm256_mul_ps(_mm256_sub_ps(mx1[i], mx2[i]), _mm256_sub_ps(my1[i], *my3)), 
+                        _mm256_mul_ps(_mm256_sub_ps(my1[i], my2[i]), _mm256_sub_ps(mx1[i], *mx3))
+                    ), 
+                mden);
+        mpt_x = _mm256_add_ps(mx1[i], _mm256_mul_ps(mt, _mm256_sub_ps(mx2[i], mx1[i])));
+        mpt_y = _mm256_add_ps(my1[i], _mm256_mul_ps(mt, _mm256_sub_ps(my2[i], my1[i])));
+        float* dens = (float*) &mden;
+        float* ts = (float*) &mt;
+        float* us = (float*) &mu;
+        float* pt_xs = (float*) &mpt_x;
+        float* pt_ys = (float*) &mpt_y;
+        for (int j = 0; j < 8; j++) {
+            if (i == nPacks - 1 && j > nWalls % 8 - 1)
+                break;
+            float den = dens[j], u = -us[j], t = ts[j];
+            if (den != 0 && t >= 0 && t <= 1 && u >= 0) {
+                if (u < min_dist) {
+                    min_dist = u;
+                    pt[0] = pt_xs[j];
+                    pt[1] = pt_ys[j];
+                    hasIntersection = true;
+                }
+            }
+        }
+    }
+    return hasIntersection;
+}
+
+std::vector<float> litAreaFast(float light_x, float light_y, std::vector<float>& walls) {
+    std::vector<std::tuple<float, float, float>> visibilityAreaPoints;
+    std::set<std::tuple<float, float>> endpoints;
+    std::vector<float> result;
+    float* x1 = (float*)aligned_alloc(32, nelem * sizeof(float));
+    float* y1 = (float*)aligned_alloc(32, nelem * sizeof(float));
+    float* x2 = (float*)aligned_alloc(32, nelem * sizeof(float));
+    float* y2 = (float*)aligned_alloc(32, nelem * sizeof(float));
+    for (size_t i = 0; i < walls.size() / 4; i++) {
+        x1[i] = walls[i * 4];
+        y1[i] = walls[i * 4 + 1];
+        x2[i] = walls[i * 4 + 2];
+        y2[i] = walls[i * 4 + 3];
+    }
+    for (size_t i = 0; i < walls.size() / 2; i++) {
+        float& ex = walls[i * 2], ey = walls[i * 2 + 1];
+        if (endpoints.find({ex, ey}) != endpoints.end()) {
+            continue;
+        }
+        endpoints.insert({ex, ey});
+    }
+    for (const std::tuple<float, float> &endpoint : endpoints) {
+        float ex = std::get<0>(endpoint), ey = std::get<1>(endpoint);
+        float rdx = ex - light_x, rdy = ey - light_y;
+        float base_angle = atan2f(rdy, rdx);
+        float angle = 0;
+        for (int j = 0; j < 3; j++) {
+            switch (j) {
+                case 0: angle = base_angle - 0.0001f; break;
+                case 2: angle = base_angle + 0.0001f; break;
+                default: angle = base_angle;
+            }
+            __m256 light_x1 = _mm256_set1_ps(light_x);
+            __m256 light_y1 = _mm256_set1_ps(light_y);
+            __m256 light_x2 = _mm256_set1_ps(light_x + cosf(angle));
+            __m256 light_y2 = _mm256_set1_ps(light_y + sinf(angle));
+            __m256* mx1 = (__m256*) x1;
+            __m256* my1 = (__m256*) y1;
+            __m256* mx2 = (__m256*) x2;
+            __m256* my2 = (__m256*) y2;
+            const int nWalls = (walls.size() / 4);
+            float pt[2] = {0.0, 0.0};
+            bool intersected = intersect_simd(
+                nWalls, pt, mx1, my1, mx2, my2, &light_x1, &light_y1, &light_x2, &light_y2
+            );
+            if (intersected) {
+                visibilityAreaPoints.push_back({pt[0], pt[1], atan2f(pt[1] - light_y, pt[0] - light_x)});
+            }
+        }
+    }
+    std::sort(
+        visibilityAreaPoints.begin(),
+        visibilityAreaPoints.end(),
+        [&](const std::tuple<float, float, float> &t1, const std::tuple<float, float, float> &t2)
+        {
+            return std::get<2>(t1) < std::get<2>(t2);
+        }
+    );
+    for (const std::tuple<float, float, float> &t : visibilityAreaPoints) {
+        result.push_back(std::get<0>(t));
+        result.push_back(std::get<1>(t));
+    }
+    return result;
+}
+
 std::vector<float> litArea(float light_x, float light_y, std::vector<float>& walls) {
     std::vector<std::tuple<float, float, float>> visibilityAreaPoints;
     std::set<std::tuple<float, float>> endpoints;
     std::vector<float> result;
-    for (size_t i = 0; i < walls.size(); i += 2) {
-        float& ex = walls[i], ey = walls[i + 1];
+    for (size_t i = 0; i < walls.size() / 2; i++) {
+        float& ex = walls[i * 2], ey = walls[i * 2 + 1];
         if (endpoints.find({ex, ey}) != endpoints.end()) {
             continue;
         }
@@ -118,6 +233,7 @@ std::vector<float> litArea(float light_x, float light_y, std::vector<float>& wal
 
 PYBIND11_MODULE(_raycast2d, m)
 {
-    py::bind_vector<std::vector<float>>(m, "WallList");
+    py::bind_vector<std::vector<float>>(m, "FloatVector");
     m.def("litArea", &litArea);
+    m.def("litAreaFast", &litAreaFast);
 }
