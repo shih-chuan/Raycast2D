@@ -1,6 +1,6 @@
 import pygame
 import config
-from _raycast2d import litArea, litAreaFast, FloatVector
+from _raycast2d import litArea, litAreaFast, litAreaAccurate, FloatVector
 
 lightMask = pygame.image.load('assets/light_cast.png') # radial gradient used for light pattern
 lightMask = pygame.transform.scale(lightMask, (2400,2400)) # resize gradient
@@ -119,13 +119,13 @@ class World:
         for i in range(0, len(self.walls), 4):
             pygame.draw.line(screen, config.WHITE, (self.walls[i], self.walls[i + 1]), (self.walls[i + 2], self.walls[i + 3]), 2)
         # draw lit area
-        rays = []
+        polygonData = []
         if self.lightOn:
-            rays = litAreaFast(float(self.light[0]), float(self.light[1]), self.walls)
-        # print(rays)
+            polygonData = litAreaFast(float(self.light[0]), float(self.light[1]), self.walls)
         polygon = []
-        for r in range(0, len(rays), 2):
-            polygon.append((rays[r], rays[r+1]))
+        for d in range(0, len(polygonData), 2):
+            polygon.append((polygonData[d], polygonData[d+1]))
+            # pygame.draw.line(screen, config.WHITE, (float(self.light[0]), float(self.light[1])), (polygonData[d], polygonData[d+1]), 2)
         filter = pygame.surface.Surface((screen.get_width(), screen.get_height()))
         filter.fill(pygame.color.Color('Black'))
         if len(polygon) > 2:
