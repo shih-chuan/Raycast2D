@@ -1,6 +1,6 @@
 import pygame, random
 import config
-from _raycast2d import litArea, castRays, FloatVector
+from _raycast2d import litArea, castRays, WallList
 
 lightMask = pygame.image.load('assets/light_cast.png') # radial gradient used for light pattern
 lightMask = pygame.transform.scale(lightMask, (2400,2400)) # resize gradient
@@ -27,13 +27,11 @@ class World:
         self.raysOn = False
         self.nRays = 360
         self.lightMaskOn = False
-        self.walls = FloatVector()
-        self.walls.extend([
-            -10, -10, (self.mapWidth + 10), -10, 
-            (self.mapWidth + 10), -10, (self.mapWidth + 10), (self.mapHeight + 10), 
-            (self.mapWidth + 10), (self.mapHeight + 10), -10, (self.mapHeight + 10), 
-            -10, (self.mapHeight + 10), -10, -10
-        ])
+        self.walls = WallList()
+        self.walls.append(-10, -10, (self.mapWidth + 10), -10)
+        self.walls.append((self.mapWidth + 10), -10, (self.mapWidth + 10), (self.mapHeight + 10))
+        self.walls.append((self.mapWidth + 10), (self.mapHeight + 10), -10, (self.mapHeight + 10))
+        self.walls.append(-10, (self.mapHeight + 10), -10, -10)
     def toPolyMap(self):
         self.walls.clear()
         for row in range(0, self.nCellsHeight):
@@ -51,54 +49,52 @@ class World:
                 if self.world[cellID].exist:
                     if not self.world[w].exist:
                         if self.world[n].edge_exist[WEST]:
-                            self.walls[self.world[n].edge_id[WEST] * 4 + 3] = self.walls[self.world[n].edge_id[WEST] * 4 + 3] + self.blockHeight
+                            self.walls[self.world[n].edge_id[WEST], 3] = self.walls[self.world[n].edge_id[WEST], 3] + self.blockHeight
                             self.world[cellID].edge_id[WEST] = self.world[n].edge_id[WEST]
                             self.world[cellID].edge_exist[WEST] = True
                         else:
                             edge = [col * self.blockWidth, row * self.blockHeight, col * self.blockWidth, (row + 1) * self.blockHeight]
-                            edge_id = len(self.walls) // 4
-                            self.walls.extend(edge)
+                            edge_id = len(self.walls)
+                            self.walls.append(*edge)
                             self.world[cellID].edge_id[WEST] = edge_id
                             self.world[cellID].edge_exist[WEST] = True
                     if not self.world[e].exist:
                         if self.world[n].edge_exist[EAST]:
-                            self.walls[self.world[n].edge_id[EAST] * 4 + 3] = self.walls[self.world[n].edge_id[EAST] * 4 + 3] + self.blockHeight
+                            self.walls[self.world[n].edge_id[EAST], 3] = self.walls[self.world[n].edge_id[EAST], 3] + self.blockHeight
                             self.world[cellID].edge_id[EAST] = self.world[n].edge_id[EAST]
                             self.world[cellID].edge_exist[EAST] = True
                         else:
                             edge = [(col + 1) * self.blockWidth, row * self.blockHeight, (col + 1) * self.blockWidth, (row + 1) * self.blockHeight]
-                            edge_id = len(self.walls) // 4
-                            self.walls.extend(edge)
+                            edge_id = len(self.walls)
+                            self.walls.append(*edge)
                             self.world[cellID].edge_id[EAST] = edge_id
                             self.world[cellID].edge_exist[EAST] = True
                     if not self.world[n].exist:
                         if self.world[w].edge_exist[NORTH]:
-                            self.walls[self.world[w].edge_id[NORTH] * 4 + 2] = self.walls[self.world[w].edge_id[NORTH] * 4 + 2] + self.blockWidth
+                            self.walls[self.world[w].edge_id[NORTH], 2] = self.walls[self.world[w].edge_id[NORTH], 2] + self.blockWidth
                             self.world[cellID].edge_id[NORTH] = self.world[w].edge_id[NORTH]
                             self.world[cellID].edge_exist[NORTH] = True
                         else:
                             edge = [col * self.blockWidth, row * self.blockHeight, (col + 1) * self.blockWidth, row * self.blockHeight]
-                            edge_id = len(self.walls) // 4
-                            self.walls.extend(edge)
+                            edge_id = len(self.walls)
+                            self.walls.append(*edge)
                             self.world[cellID].edge_id[NORTH] = edge_id
                             self.world[cellID].edge_exist[NORTH] = True
                     if not self.world[s].exist:
                         if self.world[w].edge_exist[SOUTH]:
-                            self.walls[self.world[w].edge_id[SOUTH] * 4 + 2] = self.walls[self.world[w].edge_id[SOUTH] * 4 + 2] + self.blockWidth
+                            self.walls[self.world[w].edge_id[SOUTH], 2] = self.walls[self.world[w].edge_id[SOUTH], 2] + self.blockWidth
                             self.world[cellID].edge_id[SOUTH] = self.world[w].edge_id[SOUTH]
                             self.world[cellID].edge_exist[SOUTH] = True
                         else:
                             edge = [col * self.blockWidth, (row + 1) * self.blockHeight, (col + 1) * self.blockWidth, (row + 1) * self.blockHeight]
-                            edge_id = len(self.walls) // 4
-                            self.walls.extend(edge)
+                            edge_id = len(self.walls)
+                            self.walls.append(*edge)
                             self.world[cellID].edge_id[SOUTH] = edge_id
                             self.world[cellID].edge_exist[SOUTH] = True
-        self.walls.extend([
-            -10, -10, (self.mapWidth + 10), -10, 
-            (self.mapWidth + 10), -10, (self.mapWidth + 10), (self.mapHeight + 10), 
-            (self.mapWidth + 10), (self.mapHeight + 10), -10, (self.mapHeight + 10), 
-            -10, (self.mapHeight + 10), -10, -10
-        ])
+        self.walls.append(-10, -10, (self.mapWidth + 10), -10)
+        self.walls.append((self.mapWidth + 10), -10, (self.mapWidth + 10), (self.mapHeight + 10))
+        self.walls.append((self.mapWidth + 10), (self.mapHeight + 10), -10, (self.mapHeight + 10))
+        self.walls.append(-10, (self.mapHeight + 10), -10, -10)
 
     def toggleWall(self, mouse_pos):
         mouse_x, mouse_y = mouse_pos
@@ -131,8 +127,8 @@ class World:
             for col in range(0, self.nCellsWidth):
                 if self.world[row * self.nCellsWidth + col].exist:
                     screen.fill(config.BLUE, pygame.Rect(col * self.blockWidth, row * self.blockHeight, self.blockWidth, self.blockHeight))
-        for i in range(0, len(self.walls), 4):
-            pygame.draw.line(screen, config.WHITE, (self.walls[i], self.walls[i + 1]), (self.walls[i + 2], self.walls[i + 3]), 2)
+        for i in range(0, len(self.walls)):
+            pygame.draw.line(screen, config.WHITE, (self.walls[i, 0], self.walls[i, 1]), (self.walls[i, 2], self.walls[i, 3]), 2)
         # draw rays
         if self.raysOn:
             rays = castRays(float(self.light[0]), float(self.light[1]), self.walls, self.nRays)

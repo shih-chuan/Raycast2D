@@ -26,7 +26,7 @@ make
 After building the library, you can now import it to your python project.
 
 ```python=
-from _raycast2d import litAreaPolygon, litAreaRays, FloatVector
+from _raycast2d import litArea, castRays, WallList
 ```
 
 The APIs are as follows:
@@ -36,7 +36,7 @@ The APIs are as follows:
 get all the intersection points of the rays and the walls
 
 ```python=
-castRays(light_x: float, light_y: float, walls: FloatVector, n_rays: int=360) -> FloatVector
+castRays(light_x: float, light_y: float, walls: WallList, n_rays: int=360) -> Vector
 ```
 
 * Parameters:
@@ -44,13 +44,13 @@ castRays(light_x: float, light_y: float, walls: FloatVector, n_rays: int=360) ->
     x coordinate of the light position
   * `light_y: float`:
     y coordinate of the light position
-  * `walls: FloatVector`:
+  * `walls: WallList`:
     coordinates of the endpoints on the map.
     e.g. if you have two walls, the first wall span from point (50, 50) to point (100, 100) and the second walls span from point (30, 40) to point (60, 80). Then should pass in `[50, 50, 100, 100, 30, 40, 60, 80]` as the `walls` parameter
   * `n_rays: int`:
     the number of rays you want to radiate from the light source
 * Returns:
-  * `intersections: FloatVector`:
+  * `intersections: Vector`:
     all the intersection points of the rays and the walls.
 
 ### _raycast2d.litArea
@@ -58,7 +58,7 @@ castRays(light_x: float, light_y: float, walls: FloatVector, n_rays: int=360) ->
 get the endpoints of the polygon area lit by a light source at a given coordinate
 
 ```python=
-litArea(light_x: float, light_y: float, walls: FloatVector) -> FloatVector
+litArea(light_x: float, light_y: float, walls: WallList) -> Vector
 ```
 
 * Parameters:
@@ -66,11 +66,11 @@ litArea(light_x: float, light_y: float, walls: FloatVector) -> FloatVector
     x coordinate of the light position
   * `light_y: float`:
     y coordinate of the light position
-  * `walls: FloatVector`:
+  * `walls: WallList`:
     coordinates of the endpoints on the map.
     e.g. if you have two walls, the first wall span from point (50, 50) to point (100, 100) and the second walls span from point (30, 40) to point (60, 80). Then should pass in `[50, 50, 100, 100, 30, 40, 60, 80]` as the `walls` parameter
 * Returns:
-  * `polygon: FloatVector`:
+  * `polygon: Vector`:
     all the endpoints of the lit polygon area.
 
 ## Run Demo

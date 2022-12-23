@@ -10,16 +10,15 @@ class Writer:
 def benchmark():
 
     setup = '''
-from _raycast2d import litArea, litArea_naive, castRays, FloatVector
-size = 1000
-walls = FloatVector()
+from _raycast2d import litArea, litArea_naive, castRays, WallList
+walls = WallList()
 for w in range(1, 1000):
-    walls.extend([w * 2, w * 10, w * 10, w * 2])
+    walls.append(10, w, 200, w)
 '''
 
-    rays = timeit.Timer('castRays(0, 0, walls, 10000)', setup=setup)
-    naive = timeit.Timer('litArea_naive(0, 0, walls)', setup=setup)
-    simd = timeit.Timer('litArea(0, 0, walls)', setup=setup)
+    rays = timeit.Timer('castRays(50, 50, walls, 10000)', setup=setup)
+    naive = timeit.Timer('litArea_naive(50, 50, walls)', setup=setup)
+    simd = timeit.Timer('litArea(50, 50, walls)', setup=setup)
 
     repeat = 5
 
