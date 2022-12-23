@@ -23,7 +23,7 @@ make
 
 ## Usage
 
-After building the library, you can now import it to your python object.
+After building the library, you can now import it to your python project.
 
 ```python=
 from _raycast2d import litAreaPolygon, litAreaRays, FloatVector
@@ -31,10 +31,12 @@ from _raycast2d import litAreaPolygon, litAreaRays, FloatVector
 
 The APIs are as follows:
 
-### _raycast2d.litAreaRays
+### _raycast2d.castRays
+
+get all the intersection points of the rays and the walls
 
 ```python=
-litAreaRays(light_x: float, light_y: float, walls: FloatVector, n_rays: int=360) -> FloatVector
+castRays(light_x: float, light_y: float, walls: FloatVector, n_rays: int=360) -> FloatVector
 ```
 
 * Parameters:
@@ -51,11 +53,12 @@ litAreaRays(light_x: float, light_y: float, walls: FloatVector, n_rays: int=360)
   * `intersections: FloatVector`:
     all the intersection points of the rays and the walls.
 
-### _raycast2d.litAreaPolygon
+### _raycast2d.litArea
+
+get the endpoints of the polygon area lit by a light source at a given coordinate
 
 ```python=
-# get the polygon area lit by a light source at given coordinate
-litAreaPolygon(light_x: float, light_y: float, walls: FloatVector) -> FloatVector
+litArea(light_x: float, light_y: float, walls: FloatVector) -> FloatVector
 ```
 
 * Parameters:
@@ -68,7 +71,7 @@ litAreaPolygon(light_x: float, light_y: float, walls: FloatVector) -> FloatVecto
     e.g. if you have two walls, the first wall span from point (50, 50) to point (100, 100) and the second walls span from point (30, 40) to point (60, 80). Then should pass in `[50, 50, 100, 100, 30, 40, 60, 80]` as the `walls` parameter
 * Returns:
   * `polygon: FloatVector`:
-    all the endpoints of the lit area polygon.
+    all the endpoints of the lit polygon area.
 
 ## Run Demo
 

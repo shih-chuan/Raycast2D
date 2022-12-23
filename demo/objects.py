@@ -1,6 +1,6 @@
-import pygame
+import pygame, random
 import config
-from _raycast2d import litAreaPolygon, litAreaPolygonFast, litAreaRays, FloatVector
+from _raycast2d import litArea, castRays, FloatVector
 
 lightMask = pygame.image.load('assets/light_cast.png') # radial gradient used for light pattern
 lightMask = pygame.transform.scale(lightMask, (2400,2400)) # resize gradient
@@ -21,7 +21,7 @@ class World:
         self.nCellsHeight = 30
         self.blockWidth = self.mapWidth // self.nCellsWidth
         self.blockHeight = self.mapHeight // self.nCellsHeight
-        self.world = [Cell() for i in range(0, self.nCellsHeight * self.nCellsWidth)]
+        self.world = [Cell() for i in range(0, (self.nCellsHeight + 1) * self.nCellsWidth)]
         self.light = (0, 0)
         self.lightOn = False
         self.raysOn = False
@@ -106,6 +106,18 @@ class World:
         self.world[cellID].exist = not self.world[cellID].exist
         self.toPolyMap()
 
+    def clearWalls(self):
+        self.walls.clear()
+        for cell in self.world:
+            cell.exist = False
+        self.toPolyMap()
+
+    def randomWalls(self, n):
+        list = range(1, self.nCellsHeight * self.nCellsWidth)
+        for cell in random.sample(list, n):
+            self.world[cell].exist = True
+        self.toPolyMap()
+
     def draw(self, screen):
         # draw background
         screen.fill(config.BLACK)
@@ -123,12 +135,12 @@ class World:
             pygame.draw.line(screen, config.WHITE, (self.walls[i], self.walls[i + 1]), (self.walls[i + 2], self.walls[i + 3]), 2)
         # draw rays
         if self.raysOn:
-            rays = litAreaRays(float(self.light[0]), float(self.light[1]), self.walls, self.nRays)
+            rays = castRays(float(self.light[0]), float(self.light[1]), self.walls, self.nRays)
             for d in range(0, len(rays), 2):
                 pygame.draw.line(screen, config.WHITE, (float(self.light[0]), float(self.light[1])), (rays[d], rays[d+1]), 2)
         # draw lit area
         if self.lightOn:
-            polygonData = litAreaPolygonFast(float(self.light[0]), float(self.light[1]), self.walls)
+            polygonData = litArea(float(self.light[0]), float(self.light[1]), self.walls)
             polygon = []
             for d in range(0, len(polygonData), 2):
                 polygon.append((polygonData[d], polygonData[d+1]))

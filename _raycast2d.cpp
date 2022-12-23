@@ -109,7 +109,7 @@ bool intersect_simd(
     return hasIntersection;
 }
 
-std::vector<float> litAreaRays(float light_x, float light_y, std::vector<float>& walls, int n_rays) {
+std::vector<float> castRays(float light_x, float light_y, std::vector<float>& walls, int n_rays) {
     std::vector<float> results;
     for (int i = 0; i < n_rays; i++) {
         float angle = i * (M_PI / (n_rays / 2));
@@ -142,7 +142,7 @@ std::vector<float> litAreaRays(float light_x, float light_y, std::vector<float>&
     return results;
 }
 
-std::vector<float> litAreaPolygonFast(float light_x, float light_y, std::vector<float>& walls) {
+std::vector<float> litArea(float light_x, float light_y, std::vector<float>& walls) {
     std::vector<std::tuple<float, float, float>> visibilityAreaPoints;
     std::set<std::tuple<float, float>> endpoints;
     std::vector<float> result;
@@ -207,16 +207,12 @@ std::vector<float> litAreaPolygonFast(float light_x, float light_y, std::vector<
     return result;
 }
 
-std::vector<float> litAreaPolygon(float light_x, float light_y, std::vector<float>& walls) {
+std::vector<float> litArea_naive(float light_x, float light_y, std::vector<float>& walls) {
     std::vector<std::tuple<float, float, float>> visibilityAreaPoints;
     std::set<std::tuple<float, float>> endpoints;
     std::vector<float> result;
     for (size_t i = 0; i < walls.size() / 2; i++) {
-        float& ex = walls[i * 2], ey = walls[i * 2 + 1];
-        if (endpoints.find({ex, ey}) != endpoints.end()) {
-            continue;
-        }
-        endpoints.insert({ex, ey});
+        endpoints.insert({walls[i * 2], walls[i * 2 + 1]});
     }
     for (const std::tuple<float, float> &endpoint : endpoints) {
         float ex = std::get<0>(endpoint), ey = std::get<1>(endpoint);
@@ -398,7 +394,7 @@ std::vector<float> litAreaAccurate(float light_x, float light_y, std::vector<flo
 PYBIND11_MODULE(_raycast2d, m)
 {
     py::bind_vector<std::vector<float>>(m, "FloatVector");
-    m.def("litAreaPolygon", &litAreaPolygon);
-    m.def("litAreaPolygonFast", &litAreaPolygonFast);
-    m.def("litAreaRays", &litAreaRays);
+    m.def("litArea_naive", &litArea_naive);
+    m.def("litArea", &litArea);
+    m.def("castRays", &castRays);
 }

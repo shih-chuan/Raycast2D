@@ -1,5 +1,5 @@
 import unittest
-from _raycast2d import litArea, litAreaFast, FloatVector
+from _raycast2d import castRays, litArea, litArea_naive, FloatVector
 
 class RaycastTest(unittest.TestCase):
     # test case 1: basic test
@@ -46,8 +46,8 @@ class RaycastTest(unittest.TestCase):
             50, 50, 100, 100,
             30, 30, 40, 60
         ])
-        results = litArea(50.0, 50.0, walls)
-        simd_results = litAreaFast(50.0, 50.0, walls)
+        results = litArea_naive(50.0, 50.0, walls)
+        simd_results = litArea(50.0, 50.0, walls)
         self.assertEqual(results, simd_results)
         print(results)
         print(simd_results)
