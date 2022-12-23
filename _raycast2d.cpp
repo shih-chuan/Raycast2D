@@ -24,6 +24,13 @@ float distance(
     return sqrt(x_diff * x_diff + y_diff * y_diff);
 }
 
+float _angle(
+    const float& x1, const float& y1, 
+    const float& x2, const float& y2
+) {
+    return atan2f(y1 - y2, x1 - x2);
+}
+
 bool intersect(
     const float& x1, const float& y1, 
     const float& x2, const float& y2,
@@ -38,7 +45,7 @@ bool intersect(
     float t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / den;
     float u = -((x1 - x2) * (y1 - y3) - (y1 - y2) * (x1 - x3)) / den;
     dist = u;
-    if (t >= 0 && t < 1 && u >= 0) {
+    if (t >= 0 && t <= 1 && u >= 0) {
         pt[0] = x1 + t * (x2 - x1);
         pt[1] = y1 + t * (y2 - y1);
         return true;
@@ -102,7 +109,40 @@ bool intersect_simd(
     return hasIntersection;
 }
 
-std::vector<float> litAreaFast(float light_x, float light_y, std::vector<float>& walls) {
+std::vector<float> litAreaRays(float light_x, float light_y, std::vector<float>& walls, int n_rays) {
+    std::vector<float> results;
+    for (int i = 0; i < n_rays; i++) {
+        float angle = i * (M_PI / (n_rays / 2));
+        float min_dist = std::numeric_limits<float>::max();
+        float min_px = 0, min_py = 0;
+        bool hasIntersection = false;
+        for (size_t k = 0; k < walls.size(); k += 4) {
+            float pt[2], dist;
+            bool intersected =  intersect(
+                walls[k], walls[k + 1], 
+                walls[k + 2], walls[k + 3],
+                light_x, light_y,
+                light_x + cosf(angle), light_y + sinf(angle),
+                pt, dist
+            );
+            if (intersected) {
+                if (dist < min_dist) {
+                    min_dist = dist;
+                    min_px = pt[0];
+                    min_py = pt[1];
+                    hasIntersection = true;
+                }
+            }
+        }
+        if (hasIntersection) {
+            results.push_back(min_px);
+            results.push_back(min_py);
+        }
+    }
+    return results;
+}
+
+std::vector<float> litAreaPolygonFast(float light_x, float light_y, std::vector<float>& walls) {
     std::vector<std::tuple<float, float, float>> visibilityAreaPoints;
     std::set<std::tuple<float, float>> endpoints;
     std::vector<float> result;
@@ -167,7 +207,7 @@ std::vector<float> litAreaFast(float light_x, float light_y, std::vector<float>&
     return result;
 }
 
-std::vector<float> litArea(float light_x, float light_y, std::vector<float>& walls) {
+std::vector<float> litAreaPolygon(float light_x, float light_y, std::vector<float>& walls) {
     std::vector<std::tuple<float, float, float>> visibilityAreaPoints;
     std::set<std::tuple<float, float>> endpoints;
     std::vector<float> result;
@@ -231,9 +271,134 @@ std::vector<float> litArea(float light_x, float light_y, std::vector<float>& wal
     return result;
 }
 
+struct Endpoint {
+    float x, y, angle;
+    Endpoint(float x, float y, float angle): x(x), y(y), angle(angle) {};
+    bool operator<(const Endpoint &e) const {
+        return e.angle > angle;
+    }
+};
+
+std::tuple<float, float, float, float> find_nearest_wall(
+    float light_x, float light_y, float angle,
+    std::set<std::tuple<float, float, float, float>> walls,
+    float intersect_pt[2]
+) {
+    float min_dist = std::numeric_limits<float>::max();
+    float min_px = 0, min_py = 0;
+    std::tuple<float, float, float, float> nearest_wall;
+    bool hasIntersection = false;
+    std::cout << "walls in find nearest wall:" << std::endl;
+    for (std::tuple<float, float, float, float> wall : walls) {
+        float pt[2], dist;
+        std::cout << 
+            std::get<0>(wall) << " " << std::get<1>(wall) << " " << 
+            std::get<2>(wall) << " " << std::get<3>(wall) << std::endl;
+        bool intersected = intersect(
+            std::get<0>(wall), std::get<1>(wall), 
+            std::get<2>(wall), std::get<3>(wall),
+            light_x, light_y,
+            light_x + cosf(angle), light_y + sinf(angle),
+            pt, dist
+        );
+        if (intersected) {
+            std::cout << "intersected" << std::endl;
+            if (dist < min_dist) {
+                min_dist = dist;
+                min_px = pt[0];
+                min_py = pt[1];
+                nearest_wall = {
+                    std::get<0>(wall), std::get<1>(wall), 
+                    std::get<2>(wall), std::get<3>(wall)
+                };
+                hasIntersection = true;
+            }
+        }
+    }
+    if (hasIntersection) {
+        intersect_pt[0] = min_px;
+        intersect_pt[1] = min_py;
+    } else {
+        std::cout << "no intersection!!" << std::endl;
+    }
+    return nearest_wall;
+}
+
+std::vector<float> litAreaAccurate(float light_x, float light_y, std::vector<float>& walls) {
+    std::set<Endpoint> endpoints;
+    std::set<std::tuple<float, float, float, float>> current_walls;
+    std::tuple<float, float, float, float> nearest_wall, new_nearest_wall;
+    float nearest_pt[2], new_nearest_pt[2];
+    std::vector<float> result;
+    for (size_t i = 0; i < walls.size() / 2; i++) {
+        float& ex = walls[i * 2], ey = walls[i * 2 + 1];
+        float angle = _angle(ex, ey, light_x, light_y);
+        endpoints.insert(Endpoint(ex, ey, angle));
+    }
+    std::cout << "angle:" << std::endl;
+    // loop over endpoints
+    for (const Endpoint &endpoint : endpoints) {
+        float ex = endpoint.x, ey = endpoint.y, angle = endpoint.angle;
+        // remember which wall is nearest
+        std::cout << "endpoint:" << ex << " " << ey << std::endl;
+        nearest_wall = find_nearest_wall(light_x, light_y, angle, current_walls, nearest_pt);
+        std::cout << "nearest_wall: " << std::endl;
+        std::cout << 
+            std::get<0>(nearest_wall) << " " << std::get<1>(nearest_wall) << " " << 
+            std::get<2>(nearest_wall) << " " << std::get<3>(nearest_wall) << std::endl;
+        for (size_t k = 0; k < walls.size(); k += 4) {
+            float angle1 = _angle(walls[k], walls[k + 1], light_x, light_y);
+            float angle2 = _angle(walls[k + 2], walls[k + 3], light_x, light_y);
+            float wall_begin[2], wall_end[2];
+            if (angle1 < angle2) {
+                wall_begin[0] = walls[k], wall_begin[1] = walls[k + 1];
+                wall_end[0] = walls[k + 2], wall_end[1] = walls[k + 3];
+            } else {
+                wall_end[0] = walls[k], wall_end[1] = walls[k + 1];
+                wall_begin[0] = walls[k + 2], wall_begin[1] = walls[k + 3];
+            }
+            // add any walls that BEGIN at this endpoint to 'walls'
+            if (ex == wall_begin[0] && ey == wall_begin[1]) {
+                current_walls.insert({walls[k], walls[k + 1], walls[k + 2], walls[k + 3]});
+            }
+            // remove any walls that END at this endpoint from 'walls'
+            if (ex == wall_end[0] && ey == wall_end[1]) {
+                current_walls.erase({walls[k], walls[k + 1], walls[k + 2], walls[k + 3]});
+            }
+        }
+        std::cout << "current_walls: " << std::endl;
+        for (std::tuple<float, float, float, float> wall : current_walls) {
+            std::cout << 
+                std::get<0>(wall) << " " << std::get<1>(wall) << " " << 
+                std::get<2>(wall) << " " << std::get<3>(wall) << std::endl;
+        }
+        // figure out which wall is now nearest
+        new_nearest_wall = find_nearest_wall(light_x, light_y, angle, current_walls, new_nearest_pt);
+        std::cout << "new_nearest_wall: " << std::endl;
+        std::cout <<
+            std::get<0>(new_nearest_wall) << " " << std::get<1>(new_nearest_wall) << " " << 
+            std::get<2>(new_nearest_wall) << " " << std::get<3>(new_nearest_wall) << std::endl;
+        std::cout << "new_nearest_point: " << std::endl;
+        std::cout << new_nearest_pt[0] << " " << new_nearest_pt[1] << std::endl;
+        if (nearest_wall != new_nearest_wall) {
+            result.push_back(nearest_pt[0]);
+            result.push_back(nearest_pt[1]);
+            result.push_back(new_nearest_pt[0]);
+            result.push_back(new_nearest_pt[1]);
+        }
+        std::cout << "results: " << std::endl;
+        for (float res : result) {
+            std::cout << res << " ";
+        }
+        std::cout << std::endl;
+    }
+    return result;
+}
+
 PYBIND11_MODULE(_raycast2d, m)
 {
     py::bind_vector<std::vector<float>>(m, "FloatVector");
-    m.def("litArea", &litArea);
-    m.def("litAreaFast", &litAreaFast);
+    m.def("litAreaPolygon", &litAreaPolygon);
+    m.def("litAreaPolygonFast", &litAreaPolygonFast);
+    m.def("litAreaRays", &litAreaRays);
 }

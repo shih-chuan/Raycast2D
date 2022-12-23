@@ -8,6 +8,81 @@ Simulate how lights radiate from a single light source on a 2D map.
 
 * github repository: [https://github.com/shih-chuan/Raycast2D](https://github.com/shih-chuan/Raycast2D)
 
+## Getting Started
+
+Build the library from the source code
+
+```shell=
+# clone the repo
+git clone https://github.com/shih-chuan/Raycast2D.git
+cd Raycast2D
+
+# build
+make
+```
+
+## Usage
+
+After building the library, you can now import it to your python object.
+
+```python=
+from _raycast2d import litAreaPolygon, litAreaRays, FloatVector
+```
+
+The APIs are as follows:
+
+### _raycast2d.litAreaRays
+
+```python=
+litAreaRays(light_x: float, light_y: float, walls: FloatVector, n_rays: int=360) -> FloatVector
+```
+
+* Parameters:
+  * `light_x: float`:
+    x coordinate of the light position
+  * `light_y: float`:
+    y coordinate of the light position
+  * `walls: FloatVector`:
+    coordinates of the endpoints on the map.
+    e.g. if you have two walls, the first wall span from point (50, 50) to point (100, 100) and the second walls span from point (30, 40) to point (60, 80). Then should pass in `[50, 50, 100, 100, 30, 40, 60, 80]` as the `walls` parameter
+  * `n_rays: int`:
+    the number of rays you want to radiate from the light source
+* Returns:
+  * `intersections: FloatVector`:
+    all the intersection points of the rays and the walls.
+
+### _raycast2d.litAreaPolygon
+
+```python=
+# get the polygon area lit by a light source at given coordinate
+litAreaPolygon(light_x: float, light_y: float, walls: FloatVector) -> FloatVector
+```
+
+* Parameters:
+  * `light_x: float`:
+    x coordinate of the light position
+  * `light_y: float`:
+    y coordinate of the light position
+  * `walls: FloatVector`:
+    coordinates of the endpoints on the map.
+    e.g. if you have two walls, the first wall span from point (50, 50) to point (100, 100) and the second walls span from point (30, 40) to point (60, 80). Then should pass in `[50, 50, 100, 100, 30, 40, 60, 80]` as the `walls` parameter
+* Returns:
+  * `polygon: FloatVector`:
+    all the endpoints of the lit area polygon.
+
+## Run Demo
+
+```shell=
+# move the built library to the demo folder
+mv _raycast2d.*.so demo
+
+# install pygame
+pip install pygame
+
+# run the code
+python3 ./demo/main.py
+```
+
 ## Problem to Solve
 
 The problem this system wants to solve is to calculate all the areas where lights from a given single light source can reach on a 2D map.

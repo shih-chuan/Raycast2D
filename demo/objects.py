@@ -1,6 +1,6 @@
 import pygame
 import config
-from _raycast2d import litArea, litAreaFast, litAreaAccurate, FloatVector
+from _raycast2d import litAreaPolygon, litAreaPolygonFast, litAreaRays, FloatVector
 
 lightMask = pygame.image.load('assets/light_cast.png') # radial gradient used for light pattern
 lightMask = pygame.transform.scale(lightMask, (2400,2400)) # resize gradient
@@ -24,6 +24,9 @@ class World:
         self.world = [Cell() for i in range(0, self.nCellsHeight * self.nCellsWidth)]
         self.light = (0, 0)
         self.lightOn = False
+        self.raysOn = False
+        self.nRays = 360
+        self.lightMaskOn = False
         self.walls = FloatVector()
         self.walls.extend([
             -10, -10, (self.mapWidth + 10), -10, 
@@ -118,18 +121,24 @@ class World:
                     screen.fill(config.BLUE, pygame.Rect(col * self.blockWidth, row * self.blockHeight, self.blockWidth, self.blockHeight))
         for i in range(0, len(self.walls), 4):
             pygame.draw.line(screen, config.WHITE, (self.walls[i], self.walls[i + 1]), (self.walls[i + 2], self.walls[i + 3]), 2)
+        # draw rays
+        if self.raysOn:
+            rays = litAreaRays(float(self.light[0]), float(self.light[1]), self.walls, self.nRays)
+            for d in range(0, len(rays), 2):
+                pygame.draw.line(screen, config.WHITE, (float(self.light[0]), float(self.light[1])), (rays[d], rays[d+1]), 2)
         # draw lit area
-        polygonData = []
         if self.lightOn:
-            polygonData = litAreaFast(float(self.light[0]), float(self.light[1]), self.walls)
-        polygon = []
-        for d in range(0, len(polygonData), 2):
-            polygon.append((polygonData[d], polygonData[d+1]))
-            # pygame.draw.line(screen, config.WHITE, (float(self.light[0]), float(self.light[1])), (polygonData[d], polygonData[d+1]), 2)
-        filter = pygame.surface.Surface((screen.get_width(), screen.get_height()))
-        filter.fill(pygame.color.Color('Black'))
-        if len(polygon) > 2:
-            pygame.draw.polygon(filter, config.WHITE, polygon)
-        filter.blit(lightMask, (self.light[0] - 1200, self.light[1] - 1200), special_flags=pygame.BLEND_MIN)
-        screen.blit(filter, (0, 0), special_flags=pygame.BLEND_RGBA_MAX)
+            polygonData = litAreaPolygonFast(float(self.light[0]), float(self.light[1]), self.walls)
+            polygon = []
+            for d in range(0, len(polygonData), 2):
+                polygon.append((polygonData[d], polygonData[d+1]))
+            if len(polygon) > 2:
+                if self.lightMaskOn:
+                    filter = pygame.surface.Surface((screen.get_width(), screen.get_height()))
+                    filter.fill(pygame.color.Color('Black'))
+                    pygame.draw.polygon(filter, config.WHITE, polygon)
+                    filter.blit(lightMask, (self.light[0] - 1200, self.light[1] - 1200), special_flags=pygame.BLEND_MIN)
+                    screen.blit(filter, (0, 0), special_flags=pygame.BLEND_RGBA_MAX)
+                else:
+                    pygame.draw.polygon(screen, config.WHITE, polygon)
 
